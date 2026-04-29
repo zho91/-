@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🍜 餐饮记账</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, sans-serif; background: #f5f5f5; max-width: 480px; margin: 0 auto; }
+  .header { background: #FF6B35; padding: 16px; color: #fff; display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { font-size: 18px; }
+  .header span { font-size: 13px; opacity: 0.8; }
+  .cards { display: flex; gap: 8px; padding: 12px; }
+  .card { flex: 1; border-radius: 12px; padding: 12px; text-align: center; color: #fff; }
+  .card label { font-size: 11px; display: block; margin-bottom: 4px; opacity: 0.9; }
+  .card span { font-size: 16px; font-weight: bold; }
+  .card.income { background: #4CAF50; }
+  .card.expense { background: #F44336; }
+  .card.profit { background: #2196F3; }
+  .card.loss { background: #FF9800; }
+  .tabs { display: flex; background: #fff; border-bottom: 1px solid #eee; }
+  .tab { flex: 1; padding: 12px; text-align: center; font-size: 14px; cursor: pointer; color: #888; border-bottom: 2px solid transparent; }
+  .tab.active { color: #FF6B35; border-bottom-color: #FF6B35; font-weight: bold; }
+  .page { display: none; padding: 12px; }
+  .page.active { display: block; }
+  .empty { text-align: center; color: #aaa; padding: 60px 20px; font-size: 15px; }
+  .record { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+  .record-left .date { font-size: 12px; color: #888; }
+  .record-left .note { font-size: 13px; color: #333; margin-top: 2px; }
+  .record-right { text-align: right; }
+  .record-right .inc { color: #4CAF50; font-weight: bold; }
+  .record-right .exp { color: #F44336; font-size: 12px; }
+  .fab { position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px; background: #FF6B35; border-radius: 50%; color: #fff; font-size: 28px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(255,107,53,0.4); display: flex; align-items: center; justify-content: center; }
+  .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: flex-end; }
+  .modal.open { display: flex; }
+  .modal-box { background: #fff; width: 100%; max-width: 480px; margin: 0 auto; border-radius: 20px 20px 0 0; padding: 20px; max-height: 90vh; overflow-y: auto; }
+  .modal-title { font-size: 17px; font-weight: bold; margin-bottom: 16px; text-align: center; }
+  .form-label { font-size: 13px; color: #555; margin: 14px 0 6px; }
+  .form-input { width: 100%; padding: 12px; border: 1px solid #eee; border-radius: 10px; font-size: 15px; outline: none; }
+  .form-input:focus { border-color: #FF6B35; }
+  .cats { display: flex; gap: 8px; flex-wrap: wrap; }
+  .cat { padding: 8px 16px; border-radius: 20px; border: 1px solid #ddd; background: #fff; font-size: 13px; cursor: pointer; }
+  .cat.active { background: #FF6B35; border-color: #FF6B35; color: #fff; }
+  .btn-save { width: 100%; background: #FF6B35; color: #fff; border: none; padding: 15px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 20px; }
+  .btn-cancel { width: 100%; background: #f5f5f5; color: #666; border: none; padding: 12px; border-radius: 12px; font-size: 14px; cursor: pointer; margin-top: 8px; }
+  .report-card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+  .report-month { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 12px; }
+  .report-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 14px; }
+  .report-row .val { font-weight: 500; }
+  .report-row.total { border-top: 1px solid #eee; padding-top: 8px; margin-top: 8px; }
+  .report-row.total .val { color: #2196F3; font-size: 18px; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🍜 餐饮记账</h1>
+  <span id="today-date"></span>
+</div>
+
+<div class="cards">
+  <div class="card income"><label>总营业额</label><span id="total-income">¥0</span></div>
+  <div class="card expense"><label>总支出</label><span id="total-expense">¥0</span></div>
+  <div class="card profit" id="profit-card"><label>净利润</label><span id="total-profit">¥0</span></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('records')">📋 记录</div>
+  <div class="tab" onclick="switchTab('report')">📊 月报</div>
+</div>
+
+<div class="page active" id="page-records">
+  <div id="records-list"><p class="empty">暂无记录<br>点击右下角 + 添加今日数据</p></div>
+</div>
+
+<div class="page" id="page-report">
+  <div id="report-list"><p class="empty">暂无数据</p></div>
+</div>
+
+<button class="fab" onclick="openModal()">＋</button>
+
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <div class="modal-title">记一笔</div>
+    <div class="form-label">营业类型</div>
+    <div class="cats">
+      <div class="cat active" onclick="selectCat(this)">堂食</div>
+      <div class="cat" onclick="selectCat(this)">外卖</div>
+      <div class="cat" onclick="selectCat(this)">打包</div>
+      <div class="cat" onclick="selectCat(this)">其他</div>
+    </div>
+    <div class="form-label">营业额 (¥) *</div>
+    <input class="form-input" id="input-income" type="number" placeholder="例如：1280">
+    <div class="form-label">支出 (¥)</div>
+    <input class="form-input" id="input-expense" type="number" placeholder="食材、房租、水电等">
+    <div class="form-label">备注</div>
+    <input class="form-input" id="input-note" placeholder="今天客流多...">
+    <button class="btn-save" onclick="saveRecord()">✅ 保存</button>
+    <button class="btn-cancel" onclick="closeModal()">取消</button>
+  </div>
+</div>
+
+<script>
+  let records = JSON.parse(localStorage.getItem('records') || '[]');
+  let selCat = '堂食';
+
+  document.getElementById('today-date').textContent = new Date().toLocaleDateString('zh-CN');
+
+  function save() { localStorage.setItem('records', JSON.stringify(records)); }
+
+  function fmt(n) { return '¥' + n.toFixed(2); }
+
+  function updateSummary() {
+    const inc = records.reduce((s, r) => s + r.income, 0);
+    const exp = records.reduce((s, r) => s + r.expense, 0);
+    const pro = inc - exp;
+    document.getElementById('total-income').textContent = fmt(inc);
+    document.getElementById('total-expense').textContent = fmt(exp);
+    document.getElementById('total-profit').textContent = fmt(pro);
+    const card = document.getElementById('profit-card');
+    card.className = 'card ' + (pro >= 0 ? 'profit' : 'loss');
+  }
+
+  function renderRecords() {
+    const el = document.getElementById('records-list');
+    if (!records.length) { el.innerHTML = '<p class="empty">暂无记录<br>点击右下角 + 添加今日数据</p>'; return; }
+    el.innerHTML = records.slice().reverse().map(r => `
+      <div class="record">
+        <div class="record-left">
+          <div class="date">${r.date} · ${r.cat}</div>
+          ${r.note ? `<div class="note">${r.note}</div>` : ''}
+        </div>
+        <div class="record-right">
+          <div class="inc">+${fmt(r.income)}</div>
+          ${r.expense > 0 ? `<div class="exp">-${fmt(r.expense)}</div>` : ''}
+        </div>
+      </div>`).join('');
+  }
+
+  function renderReport() {
+    const el = document.getElementById('report-list');
+    if (!records.length) { el.innerHTML = '<p class="empty">暂无数据</p>'; return; }
+    const months = {};
+    records.forEach(r => {
+      const k = r.date.slice(0, 7);
+      if (!months[k]) months[k] = { inc: 0, exp: 0, days: 0 };
+      months[k].inc += r.income;
+      months[k].exp += r.expense;
+      months[k].days++;
+    });
+    el.innerHTML = Object.entries(months).reverse().map(([m, d]) => `
+      <div class="report-card">
+        <div class="report-month">${m}</div>
+        <div class="report-row"><span>记录天数</span><span class="val">${d.days} 天</span></div>
+        <div class="report-row"><span>总营业额</span><span class="val" style="color:#4CAF50">${fmt(d.inc)}</span></div>
+        <div class="report-row"><span>总支出</span><span class="val" style="color:#F44336">${fmt(d.exp)}</span></div>
+        <div class="report-row total"><span>净利润</span><span class="val">${fmt(d.inc - d.exp)}</span></div>
+      </div>`).join('');
+  }
+
+  function render() { updateSummary(); renderRecords(); renderReport(); }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === (tab === 'records' ? 0 : 1)));
+    document.getElementById('page-records').classList.toggle('active', tab === 'records');
+    document.getElementById('page-report').classList.toggle('active', tab === 'report');
+  }
+
+  function selectCat(el) {
+    document.querySelectorAll('.cat').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    selCat = el.textContent;
+  }
+
+  function openModal() { document.getElementById('modal').classList.add('open'); }
+  function closeModal() {
+    document.getElementById('modal').classList.remove('open');
+    document.getElementById('input-income').value = '';
+    document.getElementById('input-expense').value = '';
+    document.getElementById('input-note').value = '';
+  }
+
+  function saveRecord() {
+    const inc = parseFloat(document.getElementById('input-income').value);
+    if (!inc) { alert('请输入营业额'); return; }
+    records.push({
+      id: Date.now(),
+      date: new Date().toLocaleDateString('zh-CN'),
+      income: inc,
+      expense: parseFloat(document.getElementById('input-expense').value) || 0,
+      note: document.getElementById('input-note').value,
+      cat: selCat,
+    });
+    save(); render(); closeModal();
+  }
+
+  render();
+</script>
+</body>
+</html>
